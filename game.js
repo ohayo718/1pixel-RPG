@@ -985,16 +985,20 @@ async function enemyTurn() {
     await sleep(500);
     
     const enemy = gameState.currentEnemy;
+    const playerLevel = gameState.player.level;
     
-    // ダメージ計算改善：最低ダメージ保証 + プレイヤーレベルに応じたスケール
-    const baseDamage = enemy.attack - gameState.player.defense;
-    const levelBonus = Math.floor(gameState.player.level * 0.5); // プレイヤーが強くなると敵も強く
-    const minDamage = Math.max(3, Math.floor(enemy.attack * 0.2)); // 最低ダメージは攻撃力の20%か3の大きい方
-    let damage = Math.max(minDamage, baseDamage + levelBonus + randomVariance(3));
+    // ダメージ計算改善：プレイヤーレベルに応じて敵も強化
+    // レベルアップで防御+3なので、それを相殺+αするボーナス
+    const levelBonus = Math.floor((playerLevel - 1) * 2.5); // Lv2で+2.5, Lv3で+5, Lv4で+7.5...
+    const baseDamage = enemy.attack + levelBonus - gameState.player.defense;
+    
+    // 最低ダメージ：敵の攻撃力の25%、または5の大きい方
+    const minDamage = Math.max(5, Math.floor(enemy.attack * 0.25));
+    let damage = Math.max(minDamage, baseDamage + randomVariance(3));
     
     // 防御中ならダメージ半減
     if (gameState.player.statusEffects.includes('defending')) {
-        damage = Math.max(1, Math.floor(damage / 2));
+        damage = Math.max(2, Math.floor(damage / 2));
         gameState.player.statusEffects = gameState.player.statusEffects.filter(s => s !== 'defending');
     }
     
