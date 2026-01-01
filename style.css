@@ -524,6 +524,12 @@ body {
   cursor: not-allowed;
 }
 
+.battle-btn.end-btn {
+  background: linear-gradient(135deg, var(--accent), #8b7cf7);
+  border-color: var(--accent);
+  min-width: 200px;
+}
+
 /* ============================================
    街画面
    ============================================ */

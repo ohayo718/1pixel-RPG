@@ -55,6 +55,7 @@ const gameState = {
         expToNext: 100,
         attack: 10,
         defense: 5,
+        gold: 100,
         statusEffects: [] // 'poison', 'burn', 'frozen', 'healing'
     },
     world: [],
@@ -63,7 +64,9 @@ const gameState = {
     currentTown: null,
     storyQueue: [],
     moveCount: 0,
-    isPlayerTurn: true
+    isPlayerTurn: true,
+    battleEnded: false,
+    isBossBattle: false
 };
 
 // ============================================
@@ -105,15 +108,22 @@ const STORIES = {
         "あなたの光は弱まり...消えた。",
         "しかし、世界はあなたを忘れない。",
         "再び光となって、旅を続けよう。"
+    ],
+    
+    gameClear: [
+        "闇の光が消滅した...",
+        "世界に平和が戻った。",
+        "あなたは伝説となった。",
+        "─ CONGRATULATIONS ─"
     ]
 };
 
 const ENEMY_TYPES = [
-    { name: 'スライム', hp: 30, attack: 5, defense: 2, exp: 20, color: '#f66' },
-    { name: 'ゴブリン', hp: 50, attack: 8, defense: 4, exp: 35, color: '#f44' },
-    { name: 'オーク', hp: 80, attack: 12, defense: 6, exp: 60, color: '#c33' },
-    { name: 'ダークナイト', hp: 120, attack: 18, defense: 10, exp: 100, color: '#922' },
-    { name: '??? (ボス)', hp: 200, attack: 25, defense: 15, exp: 300, color: '#f0f', isBoss: true }
+    { name: 'スライム', hp: 30, attack: 5, defense: 2, exp: 20, gold: 15, color: '#f66' },
+    { name: 'ゴブリン', hp: 50, attack: 8, defense: 4, exp: 35, gold: 25, color: '#f44' },
+    { name: 'オーク', hp: 80, attack: 12, defense: 6, exp: 60, gold: 40, color: '#c33' },
+    { name: 'ダークナイト', hp: 120, attack: 18, defense: 10, exp: 100, gold: 60, color: '#922' },
+    { name: '闇の王', hp: 200, attack: 25, defense: 15, exp: 300, gold: 500, color: '#f0f', isBoss: true }
 ];
 
 const TOWNS = [
@@ -181,6 +191,7 @@ function initElements() {
         levelText: document.getElementById('level-text'),
         expText: document.getElementById('exp-text'),
         battleLog: document.getElementById('battle-log'),
+        battleCommands: document.getElementById('battle-commands'),
         enemyPixel: document.getElementById('enemy-pixel'),
         enemyName: document.getElementById('enemy-name'),
         playerPixel: document.getElementById('player-pixel'),
@@ -371,7 +382,7 @@ function placeTreasures() {
 }
 
 // ============================================
-// ゲーム開始
+// ゲーム開始・リセット
 // ============================================
 
 async function startGame() {
@@ -387,6 +398,34 @@ async function startGame() {
     
     // 環境音開始
     startEnvironmentSounds();
+}
+
+function resetGame() {
+    // プレイヤーをリセット
+    gameState.player = {
+        x: 16,
+        y: 16,
+        hp: 100,
+        maxHp: 100,
+        mp: 50,
+        maxMp: 50,
+        level: 1,
+        exp: 0,
+        expToNext: 100,
+        attack: 10,
+        defense: 5,
+        gold: 100,
+        statusEffects: []
+    };
+    
+    // ワールドをリセット
+    gameState.entities = [];
+    gameState.currentEnemy = null;
+    gameState.currentTown = null;
+    gameState.battleEnded = false;
+    gameState.isBossBattle = false;
+    
+    generateWorld();
 }
 
 function switchScreen(screenName) {
@@ -487,12 +526,63 @@ function updateStatusUI() {
 }
 
 // ============================================
+// HPに基づく色計算（バトル用）
+// ============================================
+
+function getHpBasedColor(hp, maxHp, baseColor = '#4af') {
+    const hpRatio = hp / maxHp;
+    const r = Math.floor(255 * (1 - hpRatio) + 68 * hpRatio);
+    const g = Math.floor(68 * hpRatio + 68 * (1 - hpRatio));
+    const b = Math.floor(255 * hpRatio);
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+function getEnemyHpColor(hp, maxHp, baseColor) {
+    const hpRatio = hp / maxHp;
+    // 敵は元の色から暗くなっていく
+    const darkness = 0.3 + (hpRatio * 0.7);
+    // baseColorをRGBに変換
+    const tempDiv = document.createElement('div');
+    tempDiv.style.color = baseColor;
+    document.body.appendChild(tempDiv);
+    const computed = getComputedStyle(tempDiv).color;
+    document.body.removeChild(tempDiv);
+    
+    const match = computed.match(/\d+/g);
+    if (match) {
+        const r = Math.floor(parseInt(match[0]) * darkness);
+        const g = Math.floor(parseInt(match[1]) * darkness);
+        const b = Math.floor(parseInt(match[2]) * darkness);
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+    return baseColor;
+}
+
+// ============================================
 // 入力処理
 // ============================================
 
 function handleKeydown(e) {
-    if (gameState.screen !== 'game') return;
+    // 画面ごとに処理を分岐
+    switch (gameState.screen) {
+        case 'game':
+            handleGameKeydown(e);
+            break;
+        case 'battle':
+            handleBattleKeydown(e);
+            break;
+        case 'town':
+            handleTownKeydown(e);
+            break;
+    }
     
+    // ショップが開いている場合
+    if (!elements.overlay.classList.contains('hidden')) {
+        handleShopKeydown(e);
+    }
+}
+
+function handleGameKeydown(e) {
     const { player } = gameState;
     let newX = player.x;
     let newY = player.y;
@@ -558,6 +648,75 @@ function handleKeydown(e) {
         checkTileEvents(newX, newY);
         
         render();
+    }
+}
+
+function handleBattleKeydown(e) {
+    if (gameState.battleEnded) {
+        // 戦闘終了後はEnterまたはSpaceでマップに戻る
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const endBtn = document.querySelector('.battle-btn.end-btn');
+            if (endBtn) endBtn.click();
+        }
+        return;
+    }
+    
+    if (!gameState.isPlayerTurn) return;
+    
+    const actions = ['attack', 'magic', 'defend', 'run'];
+    
+    switch (e.key) {
+        case '1':
+            handleBattleAction('attack');
+            break;
+        case '2':
+            handleBattleAction('magic');
+            break;
+        case '3':
+            handleBattleAction('defend');
+            break;
+        case '4':
+            handleBattleAction('run');
+            break;
+    }
+}
+
+function handleTownKeydown(e) {
+    switch (e.key) {
+        case '1':
+            handleTownAction('inn');
+            break;
+        case '2':
+            handleTownAction('shop');
+            break;
+        case '3':
+            handleTownAction('talk');
+            break;
+        case '4':
+        case 'Escape':
+            handleTownAction('leave');
+            break;
+    }
+}
+
+function handleShopKeydown(e) {
+    const shopItems = document.querySelectorAll('.shop-item:not(.disabled)');
+    const itemCount = shopItems.length;
+    
+    // 数字キーでアイテム購入
+    const keyNum = parseInt(e.key);
+    if (keyNum >= 1 && keyNum <= itemCount) {
+        const btn = shopItems[keyNum - 1];
+        if (btn) {
+            const index = parseInt(btn.dataset.index);
+            buyItem(index);
+        }
+    }
+    
+    // Escapeで閉じる
+    if (e.key === 'Escape') {
+        elements.overlay.classList.add('hidden');
     }
 }
 
@@ -646,10 +805,13 @@ async function startBattle(x, y) {
     gameState.currentEnemy = {
         ...enemy.data,
         currentHp: enemy.data.hp,
+        baseColor: enemy.data.color,
         x, y
     };
     
     gameState.isPlayerTurn = true;
+    gameState.battleEnded = false;
+    gameState.isBossBattle = enemy.data.isBoss || false;
     
     // バトル演出
     window.audioSystem.stopAllAmbient();
@@ -658,8 +820,7 @@ async function startBattle(x, y) {
     switchScreen('battle');
     
     // 敵ピクセル表示
-    elements.enemyPixel.style.background = enemy.data.color;
-    elements.enemyPixel.style.boxShadow = `0 0 30px ${enemy.data.color}`;
+    updateBattleEnemyPixel();
     elements.enemyName.textContent = enemy.data.name;
     
     // プレイヤーピクセル表示
@@ -669,24 +830,70 @@ async function startBattle(x, y) {
     elements.battleLog.innerHTML = '';
     await addBattleLog(STORIES.enemyEncounter[Math.floor(Math.random() * STORIES.enemyEncounter.length)]);
     
+    // コマンドボタンをリセット
+    showBattleCommands();
     enableBattleButtons(true);
 }
 
 function updateBattlePlayerPixel() {
     const { hp, maxHp } = gameState.player;
-    const hpRatio = hp / maxHp;
-    
-    const r = Math.floor(255 * (1 - hpRatio) + 68 * hpRatio);
-    const g = Math.floor(68 * hpRatio + 68 * (1 - hpRatio));
-    const b = Math.floor(255 * hpRatio);
-    const color = `rgb(${r}, ${g}, ${b})`;
+    const color = getHpBasedColor(hp, maxHp);
     
     elements.playerPixel.style.background = color;
     elements.playerPixel.style.boxShadow = `0 0 30px ${color}`;
 }
 
+function updateBattleEnemyPixel() {
+    const enemy = gameState.currentEnemy;
+    if (!enemy) return;
+    
+    const color = getEnemyHpColor(enemy.currentHp, enemy.hp, enemy.baseColor);
+    
+    elements.enemyPixel.style.background = color;
+    elements.enemyPixel.style.boxShadow = `0 0 30px ${color}`;
+}
+
+function showBattleCommands() {
+    elements.battleCommands.innerHTML = `
+        <button class="battle-btn" data-action="attack">[1] ⚔️ 攻撃</button>
+        <button class="battle-btn" data-action="magic">[2] ✨ 魔法</button>
+        <button class="battle-btn" data-action="defend">[3] 🛡️ 防御</button>
+        <button class="battle-btn" data-action="run">[4] 🏃 逃走</button>
+    `;
+    
+    document.querySelectorAll('.battle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            handleBattleAction(action);
+        });
+    });
+}
+
+function showEndBattleButton(isVictory, isBoss = false) {
+    if (isBoss && isVictory) {
+        elements.battleCommands.innerHTML = `
+            <button class="battle-btn end-btn" data-action="gameclear">🏆 クリア画面へ</button>
+        `;
+    } else {
+        elements.battleCommands.innerHTML = `
+            <button class="battle-btn end-btn" data-action="endbattle">📍 マップに戻る</button>
+        `;
+    }
+    
+    document.querySelectorAll('.battle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.action;
+            if (action === 'endbattle') {
+                endBattle(isVictory);
+            } else if (action === 'gameclear') {
+                showGameClear();
+            }
+        });
+    });
+}
+
 async function handleBattleAction(action) {
-    if (!gameState.isPlayerTurn) return;
+    if (!gameState.isPlayerTurn || gameState.battleEnded) return;
     
     enableBattleButtons(false);
     
@@ -729,7 +936,7 @@ async function handleBattleAction(action) {
 
 async function playerAttack() {
     const damage = Math.max(1, gameState.player.attack - gameState.currentEnemy.defense + randomVariance(5));
-    gameState.currentEnemy.currentHp -= damage;
+    gameState.currentEnemy.currentHp = Math.max(0, gameState.currentEnemy.currentHp - damage);
     
     window.audioSystem.playBattleSound('attack');
     await sleep(100);
@@ -737,7 +944,8 @@ async function playerAttack() {
     
     await addBattleLog(`あなたの攻撃！<span class="damage">${damage}</span>のダメージ！`, 'damage');
     
-    // 敵ピクセルをフラッシュ
+    // 敵ピクセルを更新
+    updateBattleEnemyPixel();
     flashElement(elements.enemyPixel);
 }
 
@@ -749,13 +957,14 @@ async function playerMagic() {
     }
     
     gameState.player.mp -= 10;
-    const damage = Math.max(1, gameState.player.attack * 1.5 + randomVariance(10));
-    gameState.currentEnemy.currentHp -= damage;
+    const damage = Math.max(1, Math.floor(gameState.player.attack * 1.5) + randomVariance(10));
+    gameState.currentEnemy.currentHp = Math.max(0, gameState.currentEnemy.currentHp - damage);
     
     window.audioSystem.playBattleSound('magic');
     
-    await addBattleLog(`✨ 魔法攻撃！<span class="damage">${Math.floor(damage)}</span>のダメージ！`, 'damage');
+    await addBattleLog(`✨ 魔法攻撃！<span class="damage">${damage}</span>のダメージ！`, 'damage');
     
+    updateBattleEnemyPixel();
     flashElement(elements.enemyPixel, '#a855f7');
     updateStatusUI();
 }
@@ -790,13 +999,20 @@ async function enemyTurn() {
 }
 
 async function tryRun() {
+    // ボス戦は逃げられない
+    if (gameState.isBossBattle) {
+        await addBattleLog('ボスからは逃げられない！', 'miss');
+        enableBattleButtons(true);
+        return;
+    }
+    
     const chance = Math.random();
     
     if (chance > 0.3) {
         window.audioSystem.playUISound('confirm');
         await addBattleLog('逃走成功！');
-        await sleep(500);
-        endBattle(false);
+        gameState.battleEnded = true;
+        showEndBattleButton(false);
     } else {
         await addBattleLog('逃げられなかった！', 'miss');
         
@@ -814,15 +1030,18 @@ async function tryRun() {
 }
 
 async function handleVictory() {
+    gameState.battleEnded = true;
     window.audioSystem.playBattleSound('victory');
     
-    await showStorySequence(STORIES.victory);
+    await addBattleLog('<span class="heal">勝利！</span>');
     
-    // 経験値獲得
+    // 経験値・ゴールド獲得
     const expGain = gameState.currentEnemy.exp;
+    const goldGain = gameState.currentEnemy.gold || 0;
     gameState.player.exp += expGain;
+    gameState.player.gold += goldGain;
     
-    await addBattleLog(`<span class="heal">${expGain}</span> の経験値を獲得！`);
+    await addBattleLog(`<span class="heal">${expGain}</span> EXP、<span class="heal">${goldGain}</span> G を獲得！`);
     
     // レベルアップチェック
     while (gameState.player.exp >= gameState.player.expToNext) {
@@ -836,8 +1055,10 @@ async function handleVictory() {
         e => !(e.type === 'enemy' && e.x === x && e.y === y)
     );
     
-    await sleep(1000);
-    endBattle(true);
+    updateStatusUI();
+    
+    // 戦闘終了ボタンを表示
+    showEndBattleButton(true, gameState.isBossBattle);
 }
 
 async function levelUp() {
@@ -853,16 +1074,18 @@ async function levelUp() {
     gameState.player.attack += 5;
     gameState.player.defense += 3;
     
-    await showStorySequence(STORIES.levelUp);
-    await addBattleLog(`<span class="heal">レベル ${gameState.player.level} になった！</span>`);
+    await addBattleLog(`<span class="heal">🎉 レベル ${gameState.player.level} になった！</span>`);
     
+    updateBattlePlayerPixel();
     updateStatusUI();
 }
 
 async function handleDefeat() {
+    gameState.battleEnded = true;
     window.audioSystem.playBattleSound('defeat');
     
-    await showStorySequence(STORIES.defeat);
+    await addBattleLog('<span class="damage">敗北...</span>');
+    await addBattleLog('村に戻って体勢を立て直そう...');
     
     // 復活
     gameState.player.hp = gameState.player.maxHp;
@@ -870,13 +1093,17 @@ async function handleDefeat() {
     gameState.player.x = 16;
     gameState.player.y = 16;
     
-    await sleep(1500);
-    endBattle(false);
+    updateBattlePlayerPixel();
+    updateStatusUI();
+    
+    // 戦闘終了ボタンを表示
+    showEndBattleButton(false);
 }
 
 function endBattle(victory) {
     gameState.currentEnemy = null;
     gameState.player.statusEffects = [];
+    gameState.battleEnded = false;
     
     switchScreen('game');
     startEnvironmentSounds();
@@ -896,6 +1123,71 @@ async function addBattleLog(message, type = '') {
     elements.battleLog.appendChild(p);
     elements.battleLog.scrollTop = elements.battleLog.scrollHeight;
     await sleep(300);
+}
+
+// ============================================
+// ゲームクリア
+// ============================================
+
+async function showGameClear() {
+    window.audioSystem.stopAllAmbient();
+    
+    elements.overlayContent.innerHTML = `
+        <div class="game-clear">
+            <h2>🏆 GAME CLEAR 🏆</h2>
+            <div class="clear-pixel"></div>
+            <p class="clear-message">闇の王を倒し、世界に平和が戻った。</p>
+            <p class="clear-stats">
+                最終レベル: ${gameState.player.level}<br>
+                獲得ゴールド: ${gameState.player.gold} G
+            </p>
+            <button class="btn-primary" id="return-title-btn">タイトルに戻る</button>
+        </div>
+    `;
+    elements.overlay.classList.remove('hidden');
+    
+    // スタイル追加
+    const style = document.createElement('style');
+    style.textContent = `
+        .game-clear {
+            text-align: center;
+            padding: 2rem;
+        }
+        .game-clear h2 {
+            font-family: var(--font-pixel);
+            font-size: 1.2rem;
+            color: #ffd700;
+            text-shadow: 0 0 20px #ffd700;
+            margin-bottom: 1.5rem;
+        }
+        .clear-pixel {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #4af, #ffd700);
+            margin: 1.5rem auto;
+            animation: clearPulse 1s ease-in-out infinite;
+            box-shadow: 0 0 30px #ffd700;
+        }
+        @keyframes clearPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+        }
+        .clear-message {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        .clear-stats {
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    document.getElementById('return-title-btn').addEventListener('click', () => {
+        elements.overlay.classList.add('hidden');
+        resetGame();
+        switchScreen('title');
+    });
 }
 
 // ============================================
@@ -922,7 +1214,8 @@ async function enterTown(x, y) {
     // 街のビジュアルを描画
     drawTownVisual();
     
-    await showStorySequence(STORIES.townEnter);
+    // 街に入った時のメッセージを表示
+    showTownMessage(STORIES.townEnter[Math.floor(Math.random() * STORIES.townEnter.length)]);
 }
 
 function drawTownVisual() {
@@ -948,15 +1241,26 @@ function drawTownVisual() {
     townCtx.shadowBlur = 0;
 }
 
+function showTownMessage(message) {
+    elements.townDescription.textContent = message;
+}
+
 async function handleTownAction(action) {
     const town = gameState.currentTown;
     window.audioSystem.playUISound('select');
     
     switch (action) {
         case 'inn':
-            gameState.player.hp = gameState.player.maxHp;
-            gameState.player.mp = gameState.player.maxMp;
-            showMessage('HP・MPが全回復した！');
+            if (gameState.player.gold >= town.innCost) {
+                gameState.player.gold -= town.innCost;
+                gameState.player.hp = gameState.player.maxHp;
+                gameState.player.mp = gameState.player.maxMp;
+                showTownMessage(`💤 ${town.innCost}G で宿泊した。HP・MPが全回復！`);
+                window.audioSystem.playBattleSound('heal');
+            } else {
+                showTownMessage(`お金が足りない... (${town.innCost}G 必要)`);
+                window.audioSystem.playUISound('cancel');
+            }
             updateStatusUI();
             break;
             
@@ -966,13 +1270,14 @@ async function handleTownAction(action) {
             
         case 'talk':
             const dialogue = town.dialogue[Math.floor(Math.random() * town.dialogue.length)];
-            showMessage(dialogue);
+            showTownMessage(dialogue);
             break;
             
         case 'leave':
             window.audioSystem.stopAmbientSound('town');
             switchScreen('game');
             startEnvironmentSounds();
+            showMessage('街を後にした...');
             render();
             break;
     }
@@ -980,23 +1285,100 @@ async function handleTownAction(action) {
 
 function showShopMenu() {
     const town = gameState.currentTown;
-    let html = '<h3>🏪 道具屋</h3><div class="shop-items">';
+    const { hp, maxHp, mp, maxMp, gold } = gameState.player;
+    
+    let html = `
+        <h3>🏪 道具屋</h3>
+        <div class="shop-status">
+            <span class="shop-hp">HP: <span class="hp-value">${hp}</span>/${maxHp}</span>
+            <span class="shop-mp">MP: <span class="mp-value">${mp}</span>/${maxMp}</span>
+        </div>
+        <p class="shop-gold">所持金: <span class="gold-amount">${gold}</span> G</p>
+        <div class="shop-items">
+    `;
     
     town.shopItems.forEach((item, i) => {
+        const canBuy = gameState.player.gold >= item.price;
         html += `
-            <button class="shop-item" data-index="${i}">
-                ${item.name} - ${item.price}G
+            <button class="shop-item ${canBuy ? '' : 'disabled'}" data-index="${i}" ${canBuy ? '' : 'disabled'}>
+                [${i + 1}] ${item.name} - ${item.price}G
             </button>
         `;
     });
     
-    html += '<button class="shop-close">閉じる</button></div>';
+    html += '</div><button class="shop-close">[ESC] 閉じる</button>';
     
     elements.overlayContent.innerHTML = html;
     elements.overlay.classList.remove('hidden');
     
+    // スタイル追加
+    const existingStyle = document.getElementById('shop-style');
+    if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = 'shop-style';
+        style.textContent = `
+            .shop-status {
+                display: flex;
+                justify-content: center;
+                gap: 2rem;
+                margin-bottom: 0.5rem;
+                font-size: 0.95rem;
+            }
+            .shop-hp .hp-value {
+                color: #e74c3c;
+                font-weight: bold;
+            }
+            .shop-mp .mp-value {
+                color: #3498db;
+                font-weight: bold;
+            }
+            .shop-gold {
+                margin: 0.5rem 0 1rem;
+                font-size: 1.1rem;
+            }
+            .gold-amount {
+                color: #ffd700;
+                font-weight: bold;
+            }
+            .shop-items {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+                margin-bottom: 1rem;
+            }
+            .shop-item {
+                padding: 0.8rem 1.2rem;
+                background: rgba(108, 92, 231, 0.2);
+                border: 1px solid var(--accent);
+                border-radius: 8px;
+                color: var(--text-primary);
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .shop-item:hover:not(.disabled) {
+                background: var(--accent);
+            }
+            .shop-item.disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+            .shop-close {
+                padding: 0.8rem 2rem;
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 8px;
+                color: var(--text-primary);
+                cursor: pointer;
+            }
+            .shop-close:hover {
+                background: rgba(255,255,255,0.2);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
     // イベント追加
-    document.querySelectorAll('.shop-item').forEach(btn => {
+    document.querySelectorAll('.shop-item:not(.disabled)').forEach(btn => {
         btn.addEventListener('click', () => {
             const index = parseInt(btn.dataset.index);
             buyItem(index);
@@ -1011,7 +1393,12 @@ function showShopMenu() {
 function buyItem(index) {
     const item = gameState.currentTown.shopItems[index];
     
-    // 簡略化：お金システムは省略、効果だけ適用
+    if (gameState.player.gold < item.price) {
+        return;
+    }
+    
+    gameState.player.gold -= item.price;
+    
     if (item.effect === 'heal') {
         gameState.player.hp = Math.min(gameState.player.maxHp, gameState.player.hp + item.value);
         window.audioSystem.playBattleSound('heal');
@@ -1020,7 +1407,9 @@ function buyItem(index) {
         window.audioSystem.playBattleSound('magic');
     }
     
-    showMessage(`${item.name}を使った！`);
+    // ショップ画面を更新
+    showShopMenu();
+    showTownMessage(`${item.name}を使った！`);
     updateStatusUI();
 }
 
@@ -1037,13 +1426,16 @@ function collectTreasure(x, y) {
     
     window.audioSystem.playBattleSound('victory');
     
+    const goldGain = treasure.data.gold;
+    gameState.player.gold += goldGain;
+    
     // マップから削除
     gameState.world[y][x] = TILE_TYPES.EMPTY;
     gameState.entities = gameState.entities.filter(
         e => !(e.type === 'treasure' && e.x === x && e.y === y)
     );
     
-    showMessage(`💎 宝箱を発見！${treasure.data.gold}Gを手に入れた！`);
+    showMessage(`💎 宝箱を発見！${goldGain}Gを手に入れた！`);
     render();
 }
 
