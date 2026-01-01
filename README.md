@@ -19,7 +19,8 @@
 ### 🚀 起動方法
 
 1.Code から Zip をダウンロード
-2.Zip を解凍。 3.ブラウザで index.html を開く。
+2.Zip を解凍。
+3.ブラウザで index.html を開く。
 
 ### 操作キー
 
@@ -60,3 +61,4 @@
 - **Web Audio API** - 立体音響（HRTF、PannerNode）
 - **Vanilla JavaScript** - フレームワーク不使用
 - **CSS3** - UI/アニメーション
+
