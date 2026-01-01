@@ -395,13 +395,14 @@ async function startGame() {
     
     switchScreen('game');
     
-    // イントロストーリー
-    await showStorySequence(STORIES.intro);
-    
+    // マップを先に描画（イントロ中も見えるように）
     render();
     
     // 環境音開始
     startEnvironmentSounds();
+    
+    // イントロストーリー
+    await showStorySequence(STORIES.intro);
 }
 
 function resetGame() {
