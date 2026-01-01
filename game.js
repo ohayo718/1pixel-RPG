@@ -119,11 +119,11 @@ const STORIES = {
 };
 
 const ENEMY_TYPES = [
-    { name: 'スライム', hp: 30, attack: 5, defense: 2, exp: 20, gold: 15, color: '#f66' },
-    { name: 'ゴブリン', hp: 50, attack: 8, defense: 4, exp: 35, gold: 25, color: '#f44' },
-    { name: 'オーク', hp: 80, attack: 12, defense: 6, exp: 60, gold: 40, color: '#c33' },
-    { name: 'ダークナイト', hp: 120, attack: 18, defense: 10, exp: 100, gold: 60, color: '#922' },
-    { name: '闇の王', hp: 200, attack: 25, defense: 15, exp: 300, gold: 500, color: '#f0f', isBoss: true }
+    { name: 'スライム', hp: 40, attack: 8, defense: 2, exp: 20, gold: 15, color: '#f66' },
+    { name: 'ゴブリン', hp: 70, attack: 14, defense: 5, exp: 40, gold: 30, color: '#f44' },
+    { name: 'オーク', hp: 120, attack: 22, defense: 8, exp: 70, gold: 50, color: '#c33' },
+    { name: 'ダークナイト', hp: 180, attack: 32, defense: 12, exp: 120, gold: 80, color: '#922' },
+    { name: '闇の王', hp: 350, attack: 45, defense: 20, exp: 500, gold: 500, color: '#f0f', isBoss: true }
 ];
 
 const TOWNS = [
@@ -568,6 +568,20 @@ function getEnemyHpColor(hp, maxHp, baseColor) {
 // ============================================
 
 function handleKeydown(e) {
+    // オーバーレイが開いている場合（ゲームオーバー、クリア画面、ポーズメニュー等）
+    if (!elements.overlay.classList.contains('hidden')) {
+        if (e.key === 'Escape') {
+            // タイトルに戻るボタンがあればクリック
+            const titleBtn = document.getElementById('gameover-title-btn') || 
+                            document.getElementById('return-title-btn') ||
+                            document.getElementById('pause-title-btn');
+            if (titleBtn) titleBtn.click();
+            return;
+        }
+        handleShopKeydown(e);
+        return;
+    }
+    
     // 画面ごとに処理を分岐
     switch (gameState.screen) {
         case 'game':
@@ -579,11 +593,6 @@ function handleKeydown(e) {
         case 'town':
             handleTownKeydown(e);
             break;
-    }
-    
-    // ショップが開いている場合
-    if (!elements.overlay.classList.contains('hidden')) {
-        handleShopKeydown(e);
     }
 }
 
@@ -616,6 +625,9 @@ function handleGameKeydown(e) {
         case 'm':
             const muted = window.audioSystem.toggleMute();
             showMessage(muted ? '🔇 ミュート' : '🔊 サウンドON');
+            return;
+        case 'Escape':
+            showPauseMenu();
             return;
         default:
             return;
@@ -1098,21 +1110,13 @@ async function levelUp() {
 async function handleDefeat() {
     gameState.battleEnded = true;
     window.audioSystem.playBattleSound('defeat');
+    window.audioSystem.stopAllAmbient();
     
     await addBattleLog('<span class="damage">敗北...</span>');
-    await addBattleLog('村に戻って体勢を立て直そう...');
     
-    // 復活
-    gameState.player.hp = gameState.player.maxHp;
-    gameState.player.mp = gameState.player.maxMp;
-    gameState.player.x = 16;
-    gameState.player.y = 16;
-    
-    updateBattlePlayerPixel();
-    updateStatusUI();
-    
-    // 戦闘終了ボタンを表示
-    showEndBattleButton(false);
+    // ゲームオーバー画面を表示
+    await sleep(1000);
+    showGameOver();
 }
 
 function endBattle(victory) {
@@ -1120,9 +1124,223 @@ function endBattle(victory) {
     gameState.player.statusEffects = [];
     gameState.battleEnded = false;
     
+    // 勝利時に敵の数をチェックしてリスポーン
+    if (victory) {
+        checkAndRespawnEnemies();
+    }
+    
     switchScreen('game');
     startEnvironmentSounds();
     render();
+}
+
+// 敵のリスポーン処理
+function checkAndRespawnEnemies() {
+    const currentEnemyCount = gameState.entities.filter(e => e.type === 'enemy' && !e.data.isBoss).length;
+    const minEnemyCount = 4; // 最低敵数
+    
+    if (currentEnemyCount < minEnemyCount) {
+        const enemiesToSpawn = minEnemyCount - currentEnemyCount + 2; // 少し多めに追加
+        
+        for (let i = 0; i < enemiesToSpawn; i++) {
+            spawnEnemy();
+        }
+    }
+}
+
+// 新しい敵を生成
+function spawnEnemy() {
+    let x, y, attempts = 0;
+    
+    // プレイヤーから離れた位置にスポーン
+    do {
+        x = Math.floor(Math.random() * WORLD_SIZE);
+        y = Math.floor(Math.random() * WORLD_SIZE);
+        const distFromPlayer = Math.sqrt(
+            Math.pow(x - gameState.player.x, 2) + 
+            Math.pow(y - gameState.player.y, 2)
+        );
+        attempts++;
+        
+        // 空のタイルで、プレイヤーから5マス以上離れている
+        if (gameState.world[y][x] === TILE_TYPES.EMPTY && distFromPlayer >= 5) {
+            break;
+        }
+    } while (attempts < 100);
+    
+    if (attempts < 100) {
+        gameState.world[y][x] = TILE_TYPES.ENEMY;
+        
+        // プレイヤーレベルに応じた敵を選択（強い敵を優先）
+        const playerLevel = gameState.player.level;
+        
+        // レベルに応じて最低敵インデックスを上げる
+        // Lv1-2: 0から / Lv3-4: 1から / Lv5+: 2から
+        const minEnemyIndex = Math.min(Math.floor((playerLevel - 1) / 2), ENEMY_TYPES.length - 3);
+        const maxEnemyIndex = Math.min(minEnemyIndex + 2, ENEMY_TYPES.length - 2); // ボス以外
+        
+        // minEnemyIndex 〜 maxEnemyIndex の範囲でランダム選択
+        const range = maxEnemyIndex - minEnemyIndex + 1;
+        const enemyIndex = minEnemyIndex + Math.floor(Math.random() * range);
+        
+        // プレイヤーレベルに応じて敵のステータスもスケール
+        const baseEnemy = ENEMY_TYPES[enemyIndex];
+        const levelScale = 1 + (playerLevel - 1) * 0.15; // レベルごとに15%強化
+        
+        const scaledEnemy = {
+            ...baseEnemy,
+            hp: Math.floor(baseEnemy.hp * levelScale),
+            attack: Math.floor(baseEnemy.attack * levelScale),
+            defense: Math.floor(baseEnemy.defense * levelScale),
+            exp: Math.floor(baseEnemy.exp * levelScale),
+            gold: Math.floor(baseEnemy.gold * levelScale)
+        };
+        
+        gameState.entities.push({
+            type: 'enemy',
+            x, y,
+            data: scaledEnemy
+        });
+    }
+}
+
+// ゲームオーバー画面
+function showGameOver() {
+    elements.overlayContent.innerHTML = `
+        <div class="game-over">
+            <h2>💀 GAME OVER 💀</h2>
+            <div class="over-pixel"></div>
+            <p class="over-message">あなたの光は消えてしまった...</p>
+            <p class="over-stats">
+                到達レベル: ${gameState.player.level}<br>
+                獲得ゴールド: ${gameState.player.gold} G
+            </p>
+            <button class="btn-primary" id="gameover-title-btn">タイトルに戻る</button>
+        </div>
+    `;
+    elements.overlay.classList.remove('hidden');
+    
+    // スタイル追加
+    const existingStyle = document.getElementById('gameover-style');
+    if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = 'gameover-style';
+        style.textContent = `
+            .game-over {
+                text-align: center;
+                padding: 2rem;
+            }
+            .game-over h2 {
+                font-family: var(--font-pixel);
+                font-size: 1rem;
+                color: #e74c3c;
+                text-shadow: 0 0 20px #e74c3c;
+                margin-bottom: 1.5rem;
+                white-space: nowrap;
+            }
+            .over-pixel {
+                width: 40px;
+                height: 40px;
+                background: #333;
+                margin: 1.5rem auto;
+                box-shadow: 0 0 10px #333;
+                animation: fadeOut 2s ease-in-out infinite;
+            }
+            @keyframes fadeOut {
+                0%, 100% { opacity: 0.3; }
+                50% { opacity: 0.6; }
+            }
+            .over-message {
+                font-size: 1rem;
+                color: var(--text-secondary);
+                margin-bottom: 1rem;
+            }
+            .over-stats {
+                color: var(--text-muted);
+                margin-bottom: 1.5rem;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    document.getElementById('gameover-title-btn').addEventListener('click', () => {
+        elements.overlay.classList.add('hidden');
+        resetGame();
+        switchScreen('title');
+    });
+}
+
+// ポーズメニュー
+function showPauseMenu() {
+    window.audioSystem.playUISound('select');
+    
+    elements.overlayContent.innerHTML = `
+        <div class="pause-menu">
+            <h2>⏸️ PAUSE</h2>
+            <div class="pause-stats">
+                Lv.${gameState.player.level} | HP: ${gameState.player.hp}/${gameState.player.maxHp} | ${gameState.player.gold}G
+            </div>
+            <div class="pause-buttons">
+                <button class="btn-primary" id="pause-resume-btn">[ESC] ゲームに戻る</button>
+                <button class="btn-secondary" id="pause-title-btn">タイトルに戻る</button>
+            </div>
+        </div>
+    `;
+    elements.overlay.classList.remove('hidden');
+    
+    // スタイル追加
+    const existingStyle = document.getElementById('pause-style');
+    if (!existingStyle) {
+        const style = document.createElement('style');
+        style.id = 'pause-style';
+        style.textContent = `
+            .pause-menu {
+                text-align: center;
+                padding: 2rem;
+            }
+            .pause-menu h2 {
+                font-family: var(--font-pixel);
+                font-size: 1.2rem;
+                color: var(--accent);
+                margin-bottom: 1rem;
+            }
+            .pause-stats {
+                color: var(--text-secondary);
+                margin-bottom: 1.5rem;
+            }
+            .pause-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 0.8rem;
+            }
+            .btn-secondary {
+                font-family: var(--font-main);
+                font-size: 1rem;
+                padding: 0.8rem 2rem;
+                background: rgba(255,255,255,0.1);
+                color: var(--text-primary);
+                border: 1px solid rgba(255,255,255,0.2);
+                border-radius: 50px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            .btn-secondary:hover {
+                background: rgba(255,255,255,0.2);
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    document.getElementById('pause-resume-btn').addEventListener('click', () => {
+        elements.overlay.classList.add('hidden');
+    });
+    
+    document.getElementById('pause-title-btn').addEventListener('click', () => {
+        elements.overlay.classList.add('hidden');
+        window.audioSystem.stopAllAmbient();
+        resetGame();
+        switchScreen('title');
+    });
 }
 
 function enableBattleButtons(enabled) {
