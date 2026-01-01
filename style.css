@@ -205,7 +205,6 @@ body {
    ============================================ */
 
 #game-screen {
-  display: none;
   flex-direction: column;
   padding: 1rem;
   gap: 1rem;
