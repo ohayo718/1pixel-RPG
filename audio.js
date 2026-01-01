@@ -217,40 +217,39 @@ class SpatialAudioSystem {
         let oscillators = [];
         
         if (type === 'wind') {
-            // 風の音（ホワイトノイズ + フィルター）
-            const bufferSize = 2 * this.context.sampleRate;
-            const noiseBuffer = this.context.createBuffer(1, bufferSize, this.context.sampleRate);
-            const output = noiseBuffer.getChannelData(0);
-            
-            for (let i = 0; i < bufferSize; i++) {
-                output[i] = Math.random() * 2 - 1;
-            }
-            
-            const noise = this.context.createBufferSource();
-            noise.buffer = noiseBuffer;
-            noise.loop = true;
-            
+            // 風の音（低音のゆっくり変動するトーン）
+            const oscillator = this.context.createOscillator();
             const filter = this.context.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.value = 400;
-            
             const lfo = this.context.createOscillator();
             const lfoGain = this.context.createGain();
-            lfo.frequency.value = 0.2;
-            lfoGain.gain.value = 200;
+            
+            // 低い周波数のサイン波をベースに
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 60;
+            
+            // LFOで周波数をゆっくり変動
+            lfo.type = 'sine';
+            lfo.frequency.value = 0.1; // 10秒周期
+            lfoGain.gain.value = 20;
             
             lfo.connect(lfoGain);
-            lfoGain.connect(filter.frequency);
+            lfoGain.connect(oscillator.frequency);
             
-            noise.connect(filter);
+            // ローパスフィルターで柔らかく
+            filter.type = 'lowpass';
+            filter.frequency.value = 100;
+            
+            gainNode.gain.value = 0.04;
+            
+            oscillator.connect(filter);
             filter.connect(gainNode);
             gainNode.connect(panner);
             panner.connect(this.masterGain);
             
-            noise.start();
+            oscillator.start();
             lfo.start();
             
-            oscillators = [noise, lfo];
+            oscillators = [oscillator, lfo];
             
         } else if (type === 'water') {
             // 水の音

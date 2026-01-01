@@ -26,12 +26,12 @@ const TILE_TYPES = {
 
 const COLORS = {
     [TILE_TYPES.EMPTY]: '#0a0a0f',
-    [TILE_TYPES.PLAYER]: '#4af',
-    [TILE_TYPES.ENEMY]: '#f44',
-    [TILE_TYPES.TOWN]: '#4f4',
-    [TILE_TYPES.FOREST]: '#2a5',
-    [TILE_TYPES.WATER]: '#38f',
-    [TILE_TYPES.MOUNTAIN]: '#666',
+    [TILE_TYPES.PLAYER]: '#00ffff',  // シアン（最も明るく目立つ）
+    [TILE_TYPES.ENEMY]: '#c44',       // 暗めの赤
+    [TILE_TYPES.TOWN]: '#ffaa00',     // オレンジ（街をわかりやすく）
+    [TILE_TYPES.FOREST]: '#1a4',      // 暗めの緑
+    [TILE_TYPES.WATER]: '#48a',       // 明るめの青
+    [TILE_TYPES.MOUNTAIN]: '#444',    // 暗めのグレー
     [TILE_TYPES.TREASURE]: '#fd0',
     [TILE_TYPES.NPC]: '#ff4',
     [TILE_TYPES.BOSS]: '#f0f'
@@ -119,11 +119,11 @@ const STORIES = {
 };
 
 const ENEMY_TYPES = [
-    { name: 'スライム', hp: 40, attack: 8, defense: 2, exp: 20, gold: 15, color: '#f66' },
-    { name: 'ゴブリン', hp: 70, attack: 14, defense: 5, exp: 40, gold: 30, color: '#f44' },
-    { name: 'オーク', hp: 120, attack: 22, defense: 8, exp: 70, gold: 50, color: '#c33' },
-    { name: 'ダークナイト', hp: 180, attack: 32, defense: 12, exp: 120, gold: 80, color: '#922' },
-    { name: '闇の王', hp: 350, attack: 45, defense: 20, exp: 500, gold: 500, color: '#f0f', isBoss: true }
+    { name: 'スライム', hp: 25, attack: 6, defense: 1, exp: 20, gold: 15, color: '#f66' },
+    { name: 'ゴブリン', hp: 40, attack: 10, defense: 3, exp: 40, gold: 30, color: '#f44' },
+    { name: 'オーク', hp: 60, attack: 15, defense: 5, exp: 70, gold: 50, color: '#c33' },
+    { name: 'ダークナイト', hp: 90, attack: 20, defense: 8, exp: 120, gold: 80, color: '#922' },
+    { name: '闇の王', hp: 200, attack: 30, defense: 12, exp: 500, gold: 500, color: '#f0f', isBoss: true }
 ];
 
 const TOWNS = [
@@ -497,10 +497,12 @@ function drawPlayer() {
         const g = Math.floor(170 + glow * 85);
         color = `rgb(100, ${g}, 100)`;
     } else {
-        // 通常：HPに応じて青→赤
-        const r = Math.floor(255 * (1 - hpRatio) + 68 * hpRatio);
-        const g = Math.floor(68 * hpRatio + 68 * (1 - hpRatio));
-        const b = Math.floor(255 * hpRatio);
+        // 通常：HPに応じてシアンが暗くなる（光が消える）
+        // HP満タン: シアン(0,255,255) / HP0: 暗い(0,30,30)
+        const brightness = 0.1 + (hpRatio * 0.9); // 10%～100%の明るさ
+        const r = 0;
+        const g = Math.floor(255 * brightness);
+        const b = Math.floor(255 * brightness);
         color = `rgb(${r}, ${g}, ${b})`;
     }
     
@@ -534,11 +536,14 @@ function updateStatusUI() {
 // HPに基づく色計算（バトル用）
 // ============================================
 
-function getHpBasedColor(hp, maxHp, baseColor = '#4af') {
+function getHpBasedColor(hp, maxHp, baseColor = '#00ffff') {
     const hpRatio = hp / maxHp;
-    const r = Math.floor(255 * (1 - hpRatio) + 68 * hpRatio);
-    const g = Math.floor(68 * hpRatio + 68 * (1 - hpRatio));
-    const b = Math.floor(255 * hpRatio);
+    // HPに応じて光が消えていく（シアン→暗い）
+    // HP満タン: シアン(0,255,255) / HP0: 暗い(0,30,30)
+    const brightness = 0.1 + (hpRatio * 0.9); // 10%～100%の明るさ
+    const r = 0;
+    const g = Math.floor(255 * brightness);
+    const b = Math.floor(255 * brightness);
     return `rgb(${r}, ${g}, ${b})`;
 }
 
@@ -568,17 +573,31 @@ function getEnemyHpColor(hp, maxHp, baseColor) {
 // ============================================
 
 function handleKeydown(e) {
-    // オーバーレイが開いている場合（ゲームオーバー、クリア画面、ポーズメニュー等）
+    // オーバーレイが開いている場合
     if (!elements.overlay.classList.contains('hidden')) {
+        // ショップ画面かどうかチェック（shop-closeボタンがあればショップ）
+        const shopCloseBtn = document.querySelector('.shop-close');
+        if (shopCloseBtn) {
+            // ショップ画面
+            handleShopKeydown(e);
+            return;
+        }
+        
+        // その他のオーバーレイ（ゲームオーバー、クリア画面、ポーズメニュー等）
         if (e.key === 'Escape') {
-            // タイトルに戻るボタンがあればクリック
+            // ポーズメニューの場合はゲームに戻る
+            const pauseResumeBtn = document.getElementById('pause-resume-btn');
+            if (pauseResumeBtn) {
+                pauseResumeBtn.click();
+                return;
+            }
+            // その他はタイトルに戻る
             const titleBtn = document.getElementById('gameover-title-btn') || 
                             document.getElementById('return-title-btn') ||
                             document.getElementById('pause-title-btn');
             if (titleBtn) titleBtn.click();
             return;
         }
-        handleShopKeydown(e);
         return;
     }
     
@@ -1020,9 +1039,19 @@ async function enemyTurn() {
     
     await addBattleLog(`${enemy.name}の攻撃！<span class="damage">${damage}</span>のダメージを受けた！`, 'damage');
     
-    flashElement(elements.playerPixel, '#f44');
+    // まず新しいHP色に更新
     updateBattlePlayerPixel();
     updateStatusUI();
+    
+    // フラッシュエフェクト（元の色を新しいHP色として使用）
+    const currentColor = getHpBasedColor(gameState.player.hp, gameState.player.maxHp);
+    elements.playerPixel.style.background = '#f44';
+    elements.playerPixel.style.boxShadow = '0 0 50px #f44';
+    
+    setTimeout(() => {
+        elements.playerPixel.style.background = currentColor;
+        elements.playerPixel.style.boxShadow = `0 0 30px ${currentColor}`;
+    }, 100);
 }
 
 async function tryRun() {
@@ -1114,9 +1143,28 @@ async function handleDefeat() {
     
     await addBattleLog('<span class="damage">敗北...</span>');
     
-    // ゲームオーバー画面を表示
     await sleep(1000);
-    showGameOver();
+    
+    // ボス戦の場合は再挑戦可能
+    if (gameState.isBossBattle) {
+        await addBattleLog('<span class="narrator">だが、まだ諦めるな...</span>');
+        await addBattleLog('マップに戻って再挑戦しよう。');
+        
+        // HP/MP全回復、初期位置に戻る（レベル等は引き継ぎ）
+        gameState.player.hp = gameState.player.maxHp;
+        gameState.player.mp = gameState.player.maxMp;
+        gameState.player.x = 16;
+        gameState.player.y = 16;
+        
+        updateBattlePlayerPixel();
+        updateStatusUI();
+        
+        // 戦闘終了ボタンを表示
+        showEndBattleButton(false);
+    } else {
+        // 通常敵に敗北 → ゲームオーバー
+        showGameOver();
+    }
 }
 
 function endBattle(victory) {
@@ -1377,7 +1425,10 @@ async function showGameClear() {
                 最終レベル: ${gameState.player.level}<br>
                 獲得ゴールド: ${gameState.player.gold} G
             </p>
-            <button class="btn-primary" id="return-title-btn">タイトルに戻る</button>
+            <div class="clear-buttons">
+                <button class="btn-primary" id="endless-mode-btn">🔄 エンドレスモード</button>
+                <button class="btn-secondary" id="return-title-btn">タイトルに戻る</button>
+            </div>
         </div>
     `;
     elements.overlay.classList.remove('hidden');
@@ -1427,8 +1478,8 @@ async function showGameClear() {
             transform: translateX(-50%);
             width: 40px;
             height: 40px;
-            background: #4af;
-            box-shadow: 0 0 30px #4af;
+            background: #00ffff;
+            box-shadow: 0 0 30px #00ffff;
         }
         .clear-message {
             font-size: 1.1rem;
@@ -1438,14 +1489,81 @@ async function showGameClear() {
             color: var(--text-secondary);
             margin-bottom: 1.5rem;
         }
+        .clear-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+        }
     `;
     document.head.appendChild(style);
     
+    // エンドレスモードボタン
+    document.getElementById('endless-mode-btn').addEventListener('click', () => {
+        elements.overlay.classList.add('hidden');
+        startEndlessMode();
+    });
+    
+    // タイトルに戻るボタン
     document.getElementById('return-title-btn').addEventListener('click', () => {
         elements.overlay.classList.add('hidden');
         resetGame();
         switchScreen('title');
     });
+}
+
+// エンドレスモード開始
+function startEndlessMode() {
+    // プレイヤーを初期位置に戻す（ステータスは引き継ぎ）
+    gameState.player.hp = gameState.player.maxHp;
+    gameState.player.mp = gameState.player.maxMp;
+    gameState.player.x = 16;
+    gameState.player.y = 16;
+    gameState.isBossBattle = false;
+    
+    // 新しいボスを含む敵を追加
+    for (let i = 0; i < 6; i++) {
+        spawnEnemy();
+    }
+    
+    // 新しいボスを配置
+    let bossX, bossY, attempts = 0;
+    do {
+        bossX = Math.floor(Math.random() * (WORLD_SIZE - 6)) + 3;
+        bossY = Math.floor(Math.random() * (WORLD_SIZE - 6)) + 3;
+        attempts++;
+    } while (gameState.world[bossY][bossX] !== TILE_TYPES.EMPTY && attempts < 100);
+    
+    if (attempts < 100) {
+        gameState.world[bossY][bossX] = TILE_TYPES.BOSS;
+        
+        // ボスもレベルスケール
+        const baseBonus = ENEMY_TYPES[ENEMY_TYPES.length - 1];
+        const levelScale = 1 + (gameState.player.level - 1) * 0.2;
+        
+        gameState.entities.push({
+            type: 'enemy',
+            x: bossX,
+            y: bossY,
+            data: {
+                ...baseBonus,
+                hp: Math.floor(baseBonus.hp * levelScale),
+                attack: Math.floor(baseBonus.attack * levelScale),
+                defense: Math.floor(baseBonus.defense * levelScale),
+                exp: Math.floor(baseBonus.exp * levelScale),
+                gold: Math.floor(baseBonus.gold * levelScale)
+            }
+        });
+    }
+    
+    switchScreen('game');
+    startEnvironmentSounds();
+    showMessage('エンドレスモード開始！新たな闇の王が現れた...');
+    render();
+    
+    // メッセージを3秒後に消す
+    setTimeout(() => {
+        elements.storyText.innerHTML = '';
+    }, 3000);
 }
 
 // ============================================
