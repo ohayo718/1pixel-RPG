@@ -130,10 +130,12 @@ const TOWNS = [
     { 
         name: '始まりの村', 
         description: '小さな光が集まる場所。旅人はここで休息する。',
-        innCost: 10,
+        innCost: 30,
+        innHealPercent: 100,
         shopItems: [
-            { name: '回復薬', price: 20, effect: 'heal', value: 30 },
-            { name: '魔法の粉', price: 30, effect: 'mp', value: 20 }
+            { name: '回復薬', price: 15, effect: 'heal', value: 30 },
+            { name: '魔法の粉', price: 20, effect: 'mp', value: 20 },
+            { name: '力の結晶', price: 50, effect: 'buff_attack', value: 5 }
         ],
         dialogue: [
             '「ようこそ、旅人よ。東の森には危険な光が潜んでいる...」',
@@ -144,10 +146,12 @@ const TOWNS = [
     {
         name: '水辺の町',
         description: '青い輝きに囲まれた静かな場所。',
-        innCost: 20,
+        innCost: 50,
+        innHealPercent: 100,
         shopItems: [
-            { name: '高級回復薬', price: 50, effect: 'heal', value: 80 },
-            { name: 'エーテル', price: 60, effect: 'mp', value: 50 }
+            { name: '高級回復薬', price: 40, effect: 'heal', value: 80 },
+            { name: 'エーテル', price: 50, effect: 'mp', value: 50 },
+            { name: '鉄壁の結晶', price: 60, effect: 'buff_defense', value: 5 }
         ],
         dialogue: [
             '「この水は全てを映し出す。あなたの本当の色もね。」',
@@ -872,11 +876,11 @@ function showBattleCommands() {
 function showEndBattleButton(isVictory, isBoss = false) {
     if (isBoss && isVictory) {
         elements.battleCommands.innerHTML = `
-            <button class="battle-btn end-btn" data-action="gameclear">🏆 クリア画面へ</button>
+            <button class="battle-btn end-btn" data-action="gameclear">[Space] 🏆 クリア画面へ</button>
         `;
     } else {
         elements.battleCommands.innerHTML = `
-            <button class="battle-btn end-btn" data-action="endbattle">📍 マップに戻る</button>
+            <button class="battle-btn end-btn" data-action="endbattle">[Space] 📍 マップに戻る</button>
         `;
     }
     
@@ -895,6 +899,8 @@ function showEndBattleButton(isVictory, isBoss = false) {
 async function handleBattleAction(action) {
     if (!gameState.isPlayerTurn || gameState.battleEnded) return;
     
+    // 連打防止：ターン中は即座にfalseにする
+    gameState.isPlayerTurn = false;
     enableBattleButtons(false);
     
     const enemy = gameState.currentEnemy;
@@ -921,7 +927,6 @@ async function handleBattleAction(action) {
     }
     
     // 敵のターン
-    gameState.isPlayerTurn = false;
     await enemyTurn();
     
     // プレイヤーが倒れたかチェック
@@ -979,11 +984,16 @@ async function enemyTurn() {
     await sleep(500);
     
     const enemy = gameState.currentEnemy;
-    let damage = Math.max(1, enemy.attack - gameState.player.defense + randomVariance(3));
+    
+    // ダメージ計算改善：最低ダメージ保証 + プレイヤーレベルに応じたスケール
+    const baseDamage = enemy.attack - gameState.player.defense;
+    const levelBonus = Math.floor(gameState.player.level * 0.5); // プレイヤーが強くなると敵も強く
+    const minDamage = Math.max(3, Math.floor(enemy.attack * 0.2)); // 最低ダメージは攻撃力の20%か3の大きい方
+    let damage = Math.max(minDamage, baseDamage + levelBonus + randomVariance(3));
     
     // 防御中ならダメージ半減
     if (gameState.player.statusEffects.includes('defending')) {
-        damage = Math.floor(damage / 2);
+        damage = Math.max(1, Math.floor(damage / 2));
         gameState.player.statusEffects = gameState.player.statusEffects.filter(s => s !== 'defending');
     }
     
@@ -1135,7 +1145,10 @@ async function showGameClear() {
     elements.overlayContent.innerHTML = `
         <div class="game-clear">
             <h2>🏆 GAME CLEAR 🏆</h2>
-            <div class="clear-pixel"></div>
+            <div class="clear-character">
+                <div class="clear-crown">👑</div>
+                <div class="clear-pixel"></div>
+            </div>
             <p class="clear-message">闇の王を倒し、世界に平和が戻った。</p>
             <p class="clear-stats">
                 最終レベル: ${gameState.player.level}<br>
@@ -1147,7 +1160,11 @@ async function showGameClear() {
     elements.overlay.classList.remove('hidden');
     
     // スタイル追加
+    const existingClearStyle = document.getElementById('clear-style');
+    if (existingClearStyle) existingClearStyle.remove();
+    
     const style = document.createElement('style');
+    style.id = 'clear-style';
     style.textContent = `
         .game-clear {
             text-align: center;
@@ -1155,22 +1172,40 @@ async function showGameClear() {
         }
         .game-clear h2 {
             font-family: var(--font-pixel);
-            font-size: 1.2rem;
+            font-size: 1rem;
             color: #ffd700;
             text-shadow: 0 0 20px #ffd700;
             margin-bottom: 1.5rem;
+            white-space: nowrap;
+        }
+        .clear-character {
+            position: relative;
+            width: 60px;
+            height: 80px;
+            margin: 1.5rem auto;
+            animation: characterFloat 2s ease-in-out infinite;
+        }
+        @keyframes characterFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .clear-crown {
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            filter: drop-shadow(0 0 10px #ffd700);
         }
         .clear-pixel {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, #4af, #ffd700);
-            margin: 1.5rem auto;
-            animation: clearPulse 1s ease-in-out infinite;
-            box-shadow: 0 0 30px #ffd700;
-        }
-        @keyframes clearPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.2); }
+            background: #4af;
+            box-shadow: 0 0 30px #4af;
         }
         .clear-message {
             font-size: 1.1rem;
@@ -1399,17 +1434,31 @@ function buyItem(index) {
     
     gameState.player.gold -= item.price;
     
+    let message = '';
+    
     if (item.effect === 'heal') {
+        const healed = Math.min(gameState.player.maxHp - gameState.player.hp, item.value);
         gameState.player.hp = Math.min(gameState.player.maxHp, gameState.player.hp + item.value);
         window.audioSystem.playBattleSound('heal');
+        message = `${item.name}を使った！ HP +${healed}`;
     } else if (item.effect === 'mp') {
+        const restored = Math.min(gameState.player.maxMp - gameState.player.mp, item.value);
         gameState.player.mp = Math.min(gameState.player.maxMp, gameState.player.mp + item.value);
         window.audioSystem.playBattleSound('magic');
+        message = `${item.name}を使った！ MP +${restored}`;
+    } else if (item.effect === 'buff_attack') {
+        gameState.player.attack += item.value;
+        window.audioSystem.playBattleSound('magic');
+        message = `${item.name}を使った！ 攻撃力 +${item.value}（永続）`;
+    } else if (item.effect === 'buff_defense') {
+        gameState.player.defense += item.value;
+        window.audioSystem.playBattleSound('magic');
+        message = `${item.name}を使った！ 防御力 +${item.value}（永続）`;
     }
     
     // ショップ画面を更新
     showShopMenu();
-    showTownMessage(`${item.name}を使った！`);
+    showTownMessage(message);
     updateStatusUI();
 }
 
