@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>1ピクセルRPG - 想像力の冒険</title>
+    <meta
+      name="description"
+      content="画面全体が1ピクセルだけで表現される超ミニマルRPG。想像力にすべてを委ねる冒険へ。"
+    />
+    <link rel="stylesheet" href="style.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="game-container">
+      <!-- タイトル画面 -->
+      <div id="title-screen" class="screen active">
+        <div class="title-content">
+          <h1 class="title">1<span class="pixel-dot">●</span>RPG</h1>
+          <p class="subtitle">— 想像力の冒険 —</p>
+          <div class="title-pixel"></div>
+          <button id="start-btn" class="btn-primary">冒険を始める</button>
+          <p class="hint">🎧 ヘッドフォン推奨 - 立体音響体験</p>
+        </div>
+      </div>
+
+      <!-- ゲーム画面 -->
+      <div id="game-screen" class="screen">
+        <div id="world-container">
+          <canvas id="game-canvas"></canvas>
+          <div id="compass">
+            <span class="dir north">N</span>
+            <span class="dir east">E</span>
+            <span class="dir south">S</span>
+            <span class="dir west">W</span>
+          </div>
+        </div>
+
+        <div id="story-panel">
+          <div id="story-text"></div>
+          <div id="story-choices"></div>
+        </div>
+
+        <div id="status-bar">
+          <div class="status-item">
+            <span class="label">HP</span>
+            <div class="bar-container">
+              <div id="hp-bar" class="bar"></div>
+            </div>
+            <span id="hp-text">100</span>
+          </div>
+          <div class="status-item">
+            <span class="label">MP</span>
+            <div class="bar-container">
+              <div id="mp-bar" class="bar mp"></div>
+            </div>
+            <span id="mp-text">50</span>
+          </div>
+          <div class="status-item">
+            <span class="label">LV</span>
+            <span id="level-text">1</span>
+          </div>
+          <div class="status-item">
+            <span class="label">EXP</span>
+            <span id="exp-text">0</span>
+          </div>
+        </div>
+
+        <div id="controls-hint">
+          <span>↑↓←→ 移動</span>
+          <span>SPACE 行動</span>
+          <span>M ミュート</span>
+        </div>
+      </div>
+
+      <!-- バトル画面 -->
+      <div id="battle-screen" class="screen">
+        <div id="battle-arena">
+          <div id="enemy-pixel-container">
+            <div id="enemy-pixel"></div>
+            <div id="enemy-name"></div>
+          </div>
+          <div id="vs-text">VS</div>
+          <div id="player-pixel-container">
+            <div id="player-pixel"></div>
+            <div id="player-name">あなた</div>
+          </div>
+        </div>
+
+        <div id="battle-log"></div>
+
+        <div id="battle-commands">
+          <button class="battle-btn" data-action="attack">⚔️ 攻撃</button>
+          <button class="battle-btn" data-action="magic">✨ 魔法</button>
+          <button class="battle-btn" data-action="defend">🛡️ 防御</button>
+          <button class="battle-btn" data-action="run">🏃 逃走</button>
+        </div>
+      </div>
+
+      <!-- 街画面 -->
+      <div id="town-screen" class="screen">
+        <div id="town-visual">
+          <canvas id="town-canvas"></canvas>
+        </div>
+        <div id="town-name"></div>
+        <div id="town-description"></div>
+        <div id="town-menu">
+          <button class="town-btn" data-action="inn">🏨 宿屋</button>
+          <button class="town-btn" data-action="shop">🏪 道具屋</button>
+          <button class="town-btn" data-action="talk">💬 住民と話す</button>
+          <button class="town-btn" data-action="leave">🚪 街を出る</button>
+        </div>
+      </div>
+
+      <!-- オーバーレイ -->
+      <div id="overlay" class="hidden">
+        <div id="overlay-content"></div>
+      </div>
+    </div>
+
+    <script src="audio.js"></script>
+    <script src="game.js"></script>
+  </body>
+</html>

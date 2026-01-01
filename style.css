@@ -1,0 +1,751 @@
+/* ============================================
+   1ピクセルRPG - スタイルシート
+   ============================================ */
+
+:root {
+  /* カラーパレット */
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #12121a;
+  --bg-card: rgba(20, 20, 30, 0.9);
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888aa;
+  --text-muted: #555566;
+
+  /* ゲームカラー */
+  --player-color: #4af;
+  --player-healthy: #4af;
+  --player-hurt: #f44;
+  --player-poison: #a4f;
+  --enemy-color: #f44;
+  --town-color: #4f4;
+  --npc-color: #ff4;
+
+  /* UI カラー */
+  --accent: #6c5ce7;
+  --accent-glow: rgba(108, 92, 231, 0.5);
+  --hp-color: #e74c3c;
+  --mp-color: #3498db;
+  --exp-color: #f1c40f;
+
+  /* エフェクト */
+  --glow-soft: 0 0 20px rgba(74, 170, 255, 0.3);
+  --glow-strong: 0 0 40px rgba(74, 170, 255, 0.6);
+
+  /* フォント */
+  --font-main: "Noto Sans JP", sans-serif;
+  --font-pixel: "Press Start 2P", cursive;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-main);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* ============================================
+   ゲームコンテナ
+   ============================================ */
+
+#game-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(
+      ellipse at center,
+      rgba(30, 30, 50, 0.8) 0%,
+      transparent 70%
+    ),
+    var(--bg-primary);
+}
+
+.screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+
+.screen.active {
+  display: flex;
+  opacity: 1;
+}
+
+/* ============================================
+   タイトル画面
+   ============================================ */
+
+#title-screen {
+  background: radial-gradient(
+      circle at 50% 50%,
+      rgba(108, 92, 231, 0.1) 0%,
+      transparent 50%
+    ),
+    var(--bg-primary);
+}
+
+.title-content {
+  text-align: center;
+  animation: fadeInUp 1s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.title {
+  font-family: var(--font-pixel);
+  font-size: clamp(2rem, 8vw, 4rem);
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  text-shadow: 0 0 30px var(--accent-glow);
+}
+
+.pixel-dot {
+  color: var(--player-color);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    text-shadow: 0 0 20px var(--player-color);
+  }
+  50% {
+    opacity: 0.6;
+    text-shadow: 0 0 40px var(--player-color);
+  }
+}
+
+.subtitle {
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+  margin-bottom: 3rem;
+  letter-spacing: 0.3em;
+}
+
+.title-pixel {
+  width: 20px;
+  height: 20px;
+  background: var(--player-color);
+  margin: 2rem auto;
+  box-shadow: var(--glow-strong);
+  animation: titlePixelPulse 3s ease-in-out infinite;
+}
+
+@keyframes titlePixelPulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 20px var(--player-color);
+  }
+  50% {
+    transform: scale(1.2);
+    box-shadow: 0 0 60px var(--player-color), 0 0 100px var(--player-color);
+  }
+}
+
+.btn-primary {
+  font-family: var(--font-main);
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 1rem 3rem;
+  background: linear-gradient(135deg, var(--accent), #8b7cf7);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 20px var(--accent-glow);
+}
+
+.btn-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 30px var(--accent-glow);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.hint {
+  margin-top: 2rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* ============================================
+   ゲーム画面
+   ============================================ */
+
+#game-screen {
+  display: none;
+  flex-direction: column;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+#world-container {
+  position: relative;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+#game-canvas {
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 0 50px rgba(74, 170, 255, 0.2),
+    inset 0 0 30px rgba(0, 0, 0, 0.5);
+  background: #050508;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#compass {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 250px;
+  height: 250px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0.3;
+}
+
+#compass .dir {
+  position: absolute;
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+#compass .north {
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+#compass .south {
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+#compass .east {
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+#compass .west {
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ストーリーパネル */
+#story-panel {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 1.5rem;
+  min-height: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#story-text {
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+
+#story-text .narrator {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+#story-text .important {
+  color: var(--exp-color);
+  font-weight: 700;
+}
+
+#story-text .danger {
+  color: var(--hp-color);
+}
+
+#story-choices {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#story-choices button {
+  font-family: var(--font-main);
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  background: rgba(108, 92, 231, 0.2);
+  color: var(--text-primary);
+  border: 1px solid var(--accent);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#story-choices button:hover {
+  background: var(--accent);
+}
+
+/* ステータスバー */
+#status-bar {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  padding: 1rem;
+  background: var(--bg-card);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.status-item .label {
+  font-family: var(--font-pixel);
+  font-size: 0.5rem;
+  color: var(--text-secondary);
+}
+
+.bar-container {
+  width: 80px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--hp-color), #ff6b6b);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  width: 100%;
+}
+
+.bar.mp {
+  background: linear-gradient(90deg, var(--mp-color), #5dade2);
+}
+
+#controls-hint {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+#controls-hint span {
+  padding: 0.3rem 0.6rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+/* ============================================
+   バトル画面
+   ============================================ */
+
+#battle-screen {
+  background: radial-gradient(
+      circle at 50% 30%,
+      rgba(255, 50, 50, 0.1) 0%,
+      transparent 50%
+    ),
+    var(--bg-primary);
+  padding: 2rem;
+  gap: 2rem;
+}
+
+#battle-arena {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4rem;
+  padding: 3rem;
+}
+
+#enemy-pixel-container,
+#player-pixel-container {
+  text-align: center;
+}
+
+#enemy-pixel,
+#player-pixel {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 1rem;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+#enemy-pixel {
+  background: var(--enemy-color);
+  box-shadow: 0 0 30px var(--enemy-color);
+  animation: enemyPulse 1s ease-in-out infinite;
+}
+
+@keyframes enemyPulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+#player-pixel {
+  background: var(--player-color);
+  box-shadow: 0 0 30px var(--player-color);
+}
+
+#enemy-name,
+#player-name {
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+}
+
+#vs-text {
+  font-family: var(--font-pixel);
+  font-size: 1.5rem;
+  color: var(--hp-color);
+  text-shadow: 0 0 20px var(--hp-color);
+  animation: vsPulse 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes vsPulse {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+#battle-log {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 1.5rem;
+  min-height: 100px;
+  max-height: 150px;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 600px;
+}
+
+#battle-log p {
+  margin-bottom: 0.5rem;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+}
+
+#battle-log .damage {
+  color: var(--hp-color);
+}
+
+#battle-log .heal {
+  color: var(--town-color);
+}
+
+#battle-log .miss {
+  color: var(--text-muted);
+}
+
+#battle-commands {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.battle-btn {
+  font-family: var(--font-main);
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 1rem 1.5rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.battle-btn:hover {
+  border-color: var(--accent);
+  background: rgba(108, 92, 231, 0.2);
+  transform: translateY(-2px);
+}
+
+.battle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   街画面
+   ============================================ */
+
+#town-screen {
+  padding: 2rem;
+  gap: 1.5rem;
+  background: radial-gradient(
+      circle at 50% 30%,
+      rgba(50, 255, 50, 0.05) 0%,
+      transparent 50%
+    ),
+    var(--bg-primary);
+}
+
+#town-visual {
+  position: relative;
+}
+
+#town-canvas {
+  border-radius: 12px;
+  box-shadow: 0 0 40px rgba(50, 255, 50, 0.2);
+  image-rendering: pixelated;
+}
+
+#town-name {
+  font-family: var(--font-pixel);
+  font-size: 1rem;
+  color: var(--town-color);
+  text-shadow: 0 0 20px var(--town-color);
+}
+
+#town-description {
+  max-width: 500px;
+  text-align: center;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+#town-menu {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.town-btn {
+  font-family: var(--font-main);
+  font-size: 1rem;
+  padding: 1rem 1.5rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 2px solid rgba(50, 255, 50, 0.2);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.town-btn:hover {
+  border-color: var(--town-color);
+  background: rgba(50, 255, 50, 0.1);
+}
+
+/* ============================================
+   オーバーレイ
+   ============================================ */
+
+#overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(5px);
+}
+
+#overlay.hidden {
+  display: none;
+}
+
+#overlay-content {
+  background: var(--bg-card);
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 400px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: overlayIn 0.3s ease;
+}
+
+@keyframes overlayIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ============================================
+   ピクセル状態エフェクト
+   ============================================ */
+
+.pixel-poison {
+  animation: poisonPulse 0.5s ease-in-out infinite !important;
+}
+
+@keyframes poisonPulse {
+  0%,
+  100% {
+    background: var(--player-color);
+  }
+  50% {
+    background: #a855f7;
+  }
+}
+
+.pixel-burn {
+  animation: burnPulse 0.3s ease-in-out infinite !important;
+}
+
+@keyframes burnPulse {
+  0%,
+  100% {
+    background: var(--player-color);
+  }
+  50% {
+    background: #f97316;
+  }
+}
+
+.pixel-frozen {
+  animation: frozenPulse 1s ease-in-out infinite !important;
+}
+
+@keyframes frozenPulse {
+  0%,
+  100% {
+    background: #38bdf8;
+    box-shadow: 0 0 20px #38bdf8;
+  }
+  50% {
+    background: #e0f2fe;
+    box-shadow: 0 0 40px #e0f2fe;
+  }
+}
+
+.pixel-healing {
+  animation: healPulse 0.8s ease-in-out infinite !important;
+}
+
+@keyframes healPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 20px var(--player-color);
+  }
+  50% {
+    box-shadow: 0 0 40px #22c55e, 0 0 60px #22c55e;
+  }
+}
+
+/* ============================================
+   スクロールバー
+   ============================================ */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* ============================================
+   レスポンシブ
+   ============================================ */
+
+@media (max-width: 600px) {
+  #status-bar {
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .bar-container {
+    width: 50px;
+  }
+
+  #battle-arena {
+    gap: 2rem;
+    padding: 1.5rem;
+  }
+
+  #battle-commands {
+    gap: 0.5rem;
+  }
+
+  .battle-btn {
+    padding: 0.8rem 1rem;
+    min-width: 100px;
+    font-size: 0.9rem;
+  }
+
+  #controls-hint {
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+}
